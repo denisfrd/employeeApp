@@ -1,0 +1,352 @@
+name: Generate and Upload SSL Certificates to Local EmployeeApp
+
+on:
+  workflow_dispatch:  # Manual trigger
+    inputs:
+      environment:
+        description: 'Target environment (local, dev, prod)'
+        required: true
+        default: 'local'
+        type: choice
+        options:
+          - local
+          - dev
+          - prod
+      employee_id:
+        description: 'Employee ID for certificate manager'
+        required: true
+        default: '1'
+      employee_name:
+        description: 'Employee name for certificate manager'
+        required: true
+        default: 'Certificate Manager'
+      cert_days:
+        description: 'Certificate validity in days'
+        required: true
+        default: '365'
+  push:
+    paths:
+      - '.github/workflows/local-ssl-cert-generation.yml'
+      - 'ssl-config/**'
+
+env:
+  LOCAL_API_URL: "http://localhost:8080"  # For Docker-based runners
+  # Alternative local URLs for different runner types:
+  # LOCAL_API_URL: "http://172.17.0.1:8080"  # For Linux Docker bridge network
+  # LOCAL_API_URL: "http://localhost:8080"    # For self-hosted runners on same machine
+  CERTIFICATE_STORAGE_PATH: './certs'
+  OPENSSL_CONFIG_PATH: './ssl-config/openssl.conf'
+
+jobs:
+  generate-and-upload-certificates:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set environment-specific API URL
+        id: set_api_url
+        run: |
+          if [[ "${{ github.event.inputs.environment }}" == "local" ]]; then
+            # For local development with GitHub Actions runner
+            API_URL="http://host.docker.internal:8080"
+            echo "Using local Docker host URL: $API_URL"
+          elif [[ "${{ github.event.inputs.environment }}" == "dev" ]]; then
+            API_URL="http://192.168.1.100:8080"  # Replace with your dev server IP
+            echo "Using dev server URL: $API_URL"
+          else
+            API_URL="http://localhost:8080"  # For self-hosted runners
+            echo "Using localhost URL: $API_URL"
+          fi
+          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
+
+      - name: Test local API connectivity
+        run: |
+          echo "Testing connection to EmployeeApp API at ${{ steps.set_api_url.outputs.api_url }}"
+          # Test if API is reachable
+          curl -s -o /dev/null -w "%{http_code}" "${{ steps.set_api_url.outputs.api_url }}/api/employees/fetch/all" || echo "⚠️ API not reachable, but continuing with certificate generation"
+          echo ""
+
+      - name: Create certificate directory
+        run: mkdir -p ${{ env.CERTIFICATE_STORAGE_PATH }}
+
+      - name: Create OpenSSL configuration
+        run: |
+          mkdir -p ssl-config
+          cat > ${{ env.OPENSSL_CONFIG_PATH }} << 'EOF'
+          [req]
+          default_bits = 2048
+          prompt = no
+          default_md = sha256
+          distinguished_name = dn
+          req_extensions = req_ext
+          
+          [dn]
+          C = ${{ secrets.CERT_COUNTRY || 'US' }}
+          ST = ${{ secrets.CERT_STATE || 'California' }}
+          L = ${{ secrets.CERT_LOCALITY || 'San Francisco' }}
+          O = ${{ secrets.CERT_ORGANIZATION || 'EmployeeApp Local' }}
+          OU = ${{ secrets.CERT_ORG_UNIT || 'IT Department' }}
+          CN = ${{ github.event.inputs.cert_common_name || 'localhost' }}
+          emailAddress = ${{ secrets.CERT_EMAIL || 'admin@localhost' }}
+          
+          [req_ext]
+          subjectAltName = @alt_names
+          
+          [alt_names]
+          DNS.1 = localhost
+          DNS.2 = host.docker.internal
+          IP.1 = 127.0.0.1
+          IP.2 = 192.168.1.100
+          EOF
+
+      - name: Generate Private Key
+        run: |
+          openssl genrsa -out ${{ env.CERTIFICATE_STORAGE_PATH }}/private.key 2048
+          echo "Private key generated successfully"
+
+      - name: Generate Certificate Signing Request (CSR)
+        run: |
+          openssl req -new \
+            -key ${{ env.CERTIFICATE_STORAGE_PATH }}/private.key \
+            -out ${{ env.CERTIFICATE_STORAGE_PATH }}/request.csr \
+            -config ${{ env.OPENSSL_CONFIG_PATH }}
+          echo "CSR generated successfully"
+
+      - name: Generate Self-Signed Certificate
+        run: |
+          openssl x509 -req \
+            -days ${{ github.event.inputs.cert_days || '365' }} \
+            -in ${{ env.CERTIFICATE_STORAGE_PATH }}/request.csr \
+            -signkey ${{ env.CERTIFICATE_STORAGE_PATH }}/private.key \
+            -out ${{ env.CERTIFICATE_STORAGE_PATH }}/certificate.crt \
+            -extfile ${{ env.OPENSSL_CONFIG_PATH }} \
+            -extensions req_ext
+          echo "Self-signed certificate generated successfully"
+
+      - name: Generate Certificate in different formats
+        run: |
+          # PEM format
+          openssl x509 -in ${{ env.CERTIFICATE_STORAGE_PATH }}/certificate.crt \
+            -out ${{ env.CERTIFICATE_STORAGE_PATH }}/certificate.pem \
+            -outform PEM
+          
+          # PKCS12 format for Windows/Linux compatibility
+          openssl pkcs12 -export \
+            -in ${{ env.CERTIFICATE_STORAGE_PATH }}/certificate.crt \
+            -inkey ${{ env.CERTIFICATE_STORAGE_PATH }}/private.key \
+            -out ${{ env.CERTIFICATE_STORAGE_PATH }}/certificate.p12 \
+            -password pass:${{ secrets.PKCS12_PASSWORD || 'changeit' }} \
+            -name "employeeapp-cert"
+          
+          # Java KeyStore format (JKS)
+          keytool -importkeystore \
+            -srckeystore ${{ env.CERTIFICATE_STORAGE_PATH }}/certificate.p12 \
+            -srcstoretype pkcs12 \
+            -srcstorepass ${{ secrets.PKCS12_PASSWORD || 'changeit' }} \
+            -destkeystore ${{ env.CERTIFICATE_STORAGE_PATH }}/keystore.jks \
+            -deststoretype jks \
+            -deststorepass ${{ secrets.JKS_PASSWORD || 'changeit' }} \
+            -alias "employeeapp-cert"
+          
+          echo "Additional certificate formats generated"
+
+      - name: Display generated files
+        run: |
+          ls -la ${{ env.CERTIFICATE_STORAGE_PATH }}/
+          echo "=== Certificate Details ==="
+          openssl x509 -in ${{ env.CERTIFICATE_STORAGE_PATH }}/certificate.crt -text -noout | grep -E "Subject:|Issuer:|Not Before:|Not After :"
+
+      - name: Encode certificates for API upload
+        id: encode_certs
+        run: |
+          # Base64 encode the files for safe transmission
+          PRIVATE_KEY_B64=$(base64 -w 0 ${{ env.CERTIFICATE_STORAGE_PATH }}/private.key)
+          CSR_B64=$(base64 -w 0 ${{ env.CERTIFICATE_STORAGE_PATH }}/request.csr)
+          CERT_B64=$(base64 -w 0 ${{ env.CERTIFICATE_STORAGE_PATH }}/certificate.crt)
+          CERT_PEM_B64=$(base64 -w 0 ${{ env.CERTIFICATE_STORAGE_PATH }}/certificate.pem)
+          CERT_P12_B64=$(base64 -w 0 ${{ env.CERTIFICATE_STORAGE_PATH }}/certificate.p12)
+          
+          echo "private_key_base64=$PRIVATE_KEY_B64" >> $GITHUB_OUTPUT
+          echo "csr_base64=$CSR_B64" >> $GITHUB_OUTPUT
+          echo "certificate_base64=$CERT_B64" >> $GITHUB_OUTPUT
+          echo "certificate_pem_base64=$CERT_PEM_B64" >> $GITHUB_OUTPUT
+          echo "certificate_p12_base64=$CERT_P12_B64" >> $GITHUB_OUTPUT
+
+      - name: Create JSON payload for API
+        id: create_payload
+        run: |
+          EMPLOYEE_ID="${{ github.event.inputs.employee_id || '1' }}"
+          EMPLOYEE_NAME="${{ github.event.inputs.employee_name || 'Certificate Manager' }}"
+          
+          # Create JSON payload
+          cat > certificate-payload.json << EOF
+          {
+            "employeeId": ${EMPLOYEE_ID},
+            "employeeName": "${EMPLOYEE_NAME}",
+            "department": "IT-Security",
+            "certificateMetadata": {
+              "privateKey": "${{ steps.encode_certs.outputs.private_key_base64 }}",
+              "csr": "${{ steps.encode_certs.outputs.csr_base64 }}",
+              "certificate": "${{ steps.encode_certs.outputs.certificate_base64 }}",
+              "certificatePem": "${{ steps.encode_certs.outputs.certificate_pem_base64 }}",
+              "certificateP12": "${{ steps.encode_certs.outputs.certificate_p12_base64 }}",
+              "generatedDate": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
+              "expiryDate": "$(date -u -d '+${{ github.event.inputs.cert_days || 365 }} days' +'%Y-%m-%dT%H:%M:%SZ')",
+              "commonName": "localhost",
+              "format": "PEM, PKCS12, JKS",
+              "environment": "${{ github.event.inputs.environment || 'local' }}"
+            }
+          }
+          EOF
+          
+          echo "JSON payload created"
+
+      - name: Upload certificates to local EmployeeApp API
+        run: |
+          API_URL="${{ steps.set_api_url.outputs.api_url }}"
+          EMPLOYEE_ID="${{ github.event.inputs.employee_id || '1' }}"
+          EMPLOYEE_NAME="${{ github.event.inputs.employee_name || 'Certificate Manager' }}"
+          
+          echo "Uploading certificates to: ${API_URL}/api/employees/upload-certificate"
+          
+          # Try multiple methods to handle local connectivity
+          
+          # Method 1: Direct API call with headers
+          HTTP_CODE=$(curl -X POST "${API_URL}/api/employees/upload-certificate" \
+            -H "Content-Type: application/json" \
+            -H "employeeId: ${EMPLOYEE_ID}" \
+            -H "employeeName: ${EMPLOYEE_NAME}" \
+            -H "department: IT-Security" \
+            -d @certificate-payload.json \
+            --write-out "%{http_code}" \
+            --silent \
+            --output response.json \
+            --connect-timeout 10 \
+            --max-time 30 \
+            --retry 3 \
+            --retry-delay 5 \
+            --retry-connrefused \
+            --fail || echo "000")
+          
+          if [ "$HTTP_CODE" -eq 200 ]; then
+            echo "Certificates uploaded successfully via Method 1!"
+            echo "Response:"
+            cat response.json
+          else
+            echo "Method 1 failed with HTTP code: $HTTP_CODE"
+            
+            # Method 2: Alternative URL for local connectivity
+            echo "Trying alternative local URL (172.17.0.1)..."
+            HTTP_CODE=$(curl -X POST "http://172.17.0.1:8080/api/employees/createEmployee" \
+              -H "Content-Type: application/json" \
+              -H "employeeId: ${EMPLOYEE_ID}" \
+              -H "employeeName: ${EMPLOYEE_NAME}" \
+              -H "department: IT-Security" \
+              -d @certificate-payload.json \
+              --write-out "%{http_code}" \
+              --silent \
+              --output response_alt.json \
+              --connect-timeout 5 \
+              --max-time 30 || echo "000")
+            
+            if [ "$HTTP_CODE" -eq 200 ]; then
+              echo "Certificates uploaded successfully via Method 2!"
+              cat response_alt.json
+            else
+              echo "Could not connect to local API. Certificates saved as artifacts."
+              echo "HTTP Code: $HTTP_CODE"
+            fi
+          fi
+
+      - name: Create local deployment script
+        run: |
+          cat > deploy-certificates-locally.sh << 'EOF'
+          #!/bin/bash
+          # Script to manually deploy certificates to local EmployeeApp
+          
+          echo "Manual Certificate Deployment Script"
+          echo "===================================="
+          
+          # Check if local API is running
+          if curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/employees/fetch/all | grep -q "200"; then
+            echo "Local API is running"
+            
+            # Upload certificates
+            curl -X POST http://localhost:8080/api/employees/createEmployee \
+              -H "Content-Type: application/json" \
+              -H "employeeId: $1" \
+              -H "employeeName: $2" \
+              -H "department: IT-Security" \
+              -d @certificate-payload.json \
+              --verbose
+          else
+            echo "Local API is not reachable at http://localhost:8080"
+            echo "Please ensure your EmployeeApp is running locally"
+          fi
+          EOF
+          
+          chmod +x deploy-certificates-locally.sh
+          echo "Local deployment script created"
+
+      - name: Upload certificates as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ssl-certificates-${{ github.event.inputs.environment || 'local' }}-${{ github.run_id }}
+          path: |
+            ${{ env.CERTIFICATE_STORAGE_PATH }}/
+            certificate-payload.json
+            deploy-certificates-locally.sh
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Display connection troubleshooting guide
+        if: always()
+        run: |
+          echo "========================================="
+          echo "🔍 LOCAL CONNECTION TROUBLESHOOTING"
+          echo "========================================="
+          echo ""
+          echo "If certificates were generated but upload failed:"
+          echo ""
+          echo "1. Ensure your local EmployeeApp is running:"
+          echo "   cd /path/to/employeeapp"
+          echo "   ./mvnw spring-boot:run  # or java -jar employeeapp.jar"
+          echo ""
+          echo "2. For GitHub-hosted runners, use these URLs:"
+          echo "   - Docker Desktop: http://host.docker.internal:8080"
+          echo "   - Linux Docker: http://172.17.0.1:8080"
+          echo ""
+          echo "3. For self-hosted runners on same machine:"
+          echo "   - Use: http://localhost:8080"
+          echo ""
+          echo "4. Manual deployment options:"
+          echo "   - Download artifact: ssl-certificates-${{ github.event.inputs.environment || 'local' }}-${{ github.run_id }}"
+          echo "   - Run: ./deploy-certificates-locally.sh ${{ github.event.inputs.employee_id || '1' }} \"${{ github.event.inputs.employee_name || 'Certificate Manager' }}\""
+          echo ""
+          echo "5. Check if API is accessible:"
+          echo "   curl -v http://localhost:8080/api/employees/fetch/all"
+          echo ""
+          echo "6. Verify EmployeeController accepts large payloads:"
+          echo "   - Check application.properties:"
+          echo "     server.tomcat.max-http-form-post-size=10MB"
+          echo "     spring.servlet.multipart.max-file-size=10MB"
+          echo "     spring.servlet.multipart.max-request-size=10MB"
+          echo "========================================="
+
+      - name: Summary
+        run: |
+          echo "========================================="
+          echo "📋 EXECUTION SUMMARY"
+          echo "========================================="
+          echo "Environment: ${{ github.event.inputs.environment || 'local' }}"
+          echo "API URL: ${{ steps.set_api_url.outputs.api_url }}"
+          echo "Employee ID: ${{ github.event.inputs.employee_id || '1' }}"
+          echo "Certificate validity: ${{ github.event.inputs.cert_days || '365' }} days"
+          echo ""
+          echo "Generated files:"
+          ls -la ${{ env.CERTIFICATE_STORAGE_PATH }}/ | awk '{print "  - " $9 " (" $5 " bytes)"}'
+          echo ""
+          echo "Artifact name: ssl-certificates-${{ github.event.inputs.environment || 'local' }}-${{ github.run_id }}"
+          echo "========================================="
