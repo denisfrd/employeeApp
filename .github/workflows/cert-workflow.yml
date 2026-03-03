@@ -209,12 +209,12 @@ jobs:
           EMPLOYEE_ID="${{ github.event.inputs.employee_id || '1' }}"
           EMPLOYEE_NAME="${{ github.event.inputs.employee_name || 'Certificate Manager' }}"
           
-          echo "Uploading certificates to: ${API_URL}/api/employees/createEmployee"
+          echo "Uploading certificates to: ${API_URL}/api/employees/upload-certificate"
           
           # Try multiple methods to handle local connectivity
           
           # Method 1: Direct API call with headers
-          HTTP_CODE=$(curl -X POST "${API_URL}/api/employees/createEmployee" \
+          HTTP_CODE=$(curl -X POST "${API_URL}/api/employees/upload-certificate" \
             -H "Content-Type: application/json" \
             -H "employeeId: ${EMPLOYEE_ID}" \
             -H "employeeName: ${EMPLOYEE_NAME}" \
