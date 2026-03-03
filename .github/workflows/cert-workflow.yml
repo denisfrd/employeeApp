@@ -30,7 +30,7 @@ on:
       - 'ssl-config/**'
 
 env:
-  LOCAL_API_URL: "http://host.docker.internal:8080"  # For Docker-based runners
+  LOCAL_API_URL: "http://localhost:8080"  # For Docker-based runners
   # Alternative local URLs for different runner types:
   # LOCAL_API_URL: "http://172.17.0.1:8080"  # For Linux Docker bridge network
   # LOCAL_API_URL: "http://localhost:8080"    # For self-hosted runners on same machine
