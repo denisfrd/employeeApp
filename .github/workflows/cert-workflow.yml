@@ -50,7 +50,7 @@ jobs:
         run: |
           if [[ "${{ github.event.inputs.environment }}" == "local" ]]; then
             # For local development with GitHub Actions runner
-            API_URL="http://host.docker.internal:8080"
+            API_URL="http://localhost:8080"
             echo "Using local Docker host URL: $API_URL"
           elif [[ "${{ github.event.inputs.environment }}" == "dev" ]]; then
             API_URL="http://192.168.1.100:8080"  # Replace with your dev server IP
