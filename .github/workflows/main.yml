@@ -1,0 +1,48 @@
+name: Generate and Upload Certificates
+
+on:
+  workflow_dispatch:  # Trigger manually; can also add push/merge triggers
+
+jobs:
+  generate-cert:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Step 2: Set up environment variables
+      - name: Set environment variables
+        run: |
+          echo "CSR_CN=employee.example.com" >> $GITHUB_ENV
+          echo "API_URL=https://api.example.com/upload" >> $GITHUB_ENV
+          echo "API_TOKEN=${{ secrets.EMPLOYEE_APP_TOKEN }}" >> $GITHUB_ENV
+
+      # Step 3: Generate private key
+      - name: Generate Private Key
+        run: |
+          openssl genrsa -out employee.key 2048
+          ls -l employee.key
+
+      # Step 4: Generate CSR
+      - name: Generate CSR
+        run: |
+          openssl req -new -key employee.key -out employee.csr \
+            -subj "/C=US/ST=State/L=City/O=Company/OU=IT Department/CN=${CSR_CN}"
+          ls -l employee.csr
+
+      # Step 5: Generate Self-Signed Certificate (Optional, if CSR is signed by CA, skip this)
+      - name: Generate Self-Signed Certificate
+        run: |
+          openssl req -x509 -key employee.key -in employee.csr -out employee.crt -days 365
+          ls -l employee.crt
+
+      # Step 6: Upload certificates securely via API
+      - name: Upload to employeeApp API
+        run: |
+          curl -X POST "http://localhost:8080/api/employees/createEmployee" \
+            -H "Authorization: Bearer $API_TOKEN" \
+            -F "private_key=@employee.key" \
+            -F "csr=@employee.csr" \
+            -F "certificate=@employee.crt"
