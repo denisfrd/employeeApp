@@ -1,0 +1,47 @@
+name: Generate and Upload Certificates
+
+on:
+  workflow_dispatch:
+
+jobs:
+  generate-and-upload:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify OpenSSL
+        run: openssl version
+
+      - name: Generate private key
+        run: |
+          openssl genrsa -out private.key 2048
+
+      - name: Generate CSR
+        run: |
+          openssl req -new \
+            -key private.key \
+            -out request.csr \
+            -subj "/C=CA/ST=Ontario/O=Testing/CN=Testing.com"
+
+      - name: Generate self-signed certificate
+        run: |
+          openssl x509 -req \
+            -in request.csr \
+            -signkey private.key \
+            -out certificate.crt \
+            -days 365
+
+      - name: Send certs to secure API
+        env:
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+        run: |
+          curl -X POST http://localhost:8080/api/employees/createEmployee \
+            -H "Authorization: Bearer $API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg key "$(cat private.key)" \
+              --arg csr "$(cat request.csr)" \
+              --arg cert "$(cat certificate.crt)" \
+              '{privateKey:$key, csr:$csr, certificate:$cert}')"
