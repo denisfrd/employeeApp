@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @RestController
@@ -32,6 +33,24 @@ public class EmployeeController {
 
         Employee savedEmployee = repository.save(employee);
         return ResponseEntity.ok(savedEmployee);
+    }
+
+    //Uploads certificate
+    @PostMapping("/upload-certificate")
+    public ResponseEntity<Employee> uploadCertificate(
+            @RequestHeader("employeeId") Long employeeId,
+            @RequestHeader("employeeName") String employeeName,
+            @RequestBody Map<String, Object> certificateData){
+
+        Employee employee = new Employee();
+        employee.setEmployeeId(employeeId);
+        employee.setEmployeeName(employeeName);
+        employee.setDepartment("IT-Security");
+
+        Employee savedEmployee = repository.save(employee);
+
+        return ResponseEntity.ok(savedEmployee);
+
     }
 
     //Fetches all employees
