@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       employee_id:
-        description: 'Employee ID for certificate owner'
+        description: 'Employee ID'
         required: true
         default: '1'
       employee_name:
@@ -14,7 +14,8 @@ on:
 
 jobs:
   generate-and-upload:
-    runs-on: ubuntu-latest
+    # Use self-hosted runner to access localhost
+    runs-on: self-hosted
     
     steps:
       - name: Checkout code
@@ -43,19 +44,18 @@ jobs:
             -in certs/request.csr \
             -signkey certs/private.key \
             -out certs/certificate.crt
-          echo "✅ Certificate generated (valid for 365 days)"
-
-      - name: List generated files
-        run: ls -la certs/
+          echo "✅ Certificate generated"
 
       - name: Create JSON payload
         run: |
-          # Base64 encode the files for safe transmission
+          # Base64 encode files
           KEY_B64=$(base64 -w 0 certs/private.key)
           CERT_B64=$(base64 -w 0 certs/certificate.crt)
           CSR_B64=$(base64 -w 0 certs/request.csr)
           
-          # Create JSON file
+          # Windows PowerShell alternative if base64 command not available
+          # KEY_B64=[Convert]::ToBase64String([IO.File]::ReadAllBytes("certs/private.key"))
+          
           cat > payload.json << EOF
           {
             "key": "$KEY_B64",
@@ -67,24 +67,24 @@ jobs:
           EOF
           echo "✅ JSON payload created"
 
-      - name: Upload certificates to API
+      - name: Upload certificates to local API
         run: |
-          # Change this URL to match where your API is running
-          # For local: http://localhost:8080
-          # For Docker: http://host.docker.internal:8080
-          # For remote: https://your-api.com
+          # This works because runner is on your machine
           API_URL="http://localhost:8080"
           EMP_ID="${{ github.event.inputs.employee_id }}"
           
           echo "Uploading to: $API_URL/api/employees/$EMP_ID/certs"
           
-          # Make the API call
-          RESPONSE=$(curl -s -X POST "$API_URL/api/employees/$EMP_ID/certs" \
+          # Try to connect with timeout and retry
+          curl -X POST "$API_URL/api/employees/$EMP_ID/certs" \
             -H "Content-Type: application/json" \
-            -d @payload.json)
+            -d @payload.json \
+            --connect-timeout 5 \
+            --max-time 30 \
+            --fail \
+            --verbose
           
-          echo "✅ API Response:"
-          echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
+          echo "✅ Upload complete"
 
       - name: Upload certificates as artifacts
         uses: actions/upload-artifact@v4
@@ -92,16 +92,3 @@ jobs:
           name: generated-certificates
           path: certs/
           retention-days: 30
-
-      - name: Workflow Summary
-        run: |
-          echo "=================================="
-          echo "✅ WORKFLOW COMPLETE"
-          echo "=================================="
-          echo "Employee ID: ${{ github.event.inputs.employee_id }}"
-          echo "Employee Name: ${{ github.event.inputs.employee_name }}"
-          echo "Certificate valid for: 365 days"
-          echo ""
-          echo "Files generated:"
-          ls -1 certs/
-          echo "=================================="
