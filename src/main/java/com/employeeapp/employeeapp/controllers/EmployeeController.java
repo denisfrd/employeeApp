@@ -78,7 +78,7 @@ public class EmployeeController {
 
     // CERTS
 
-    @PostMapping("/{empId}/certs")
+    @PostMapping("/{employeeId}/certs")
     public ResponseEntity<?> uploadCertificate(@PathVariable Long employeeId,
                                                @RequestBody Map<String, String> data) {
         //Creates or finds employee
@@ -109,7 +109,7 @@ public class EmployeeController {
     }
 
     //Fetch all certificates
-    @GetMapping("/{empId}/certs")
+    @GetMapping("/{employeeId}/certs")
     public ResponseEntity<List<Certificate>> getEmployeeCertificates(@PathVariable Long empId) {
         List<Certificate> certs = certRepo.findByEmployeeId(empId);
         return certs.isEmpty() ? ResponseEntity.notFound().build() : ResponseEntity.ok(certs);
