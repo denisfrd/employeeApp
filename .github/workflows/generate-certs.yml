@@ -1,7 +1,5 @@
-# Simple workflow to generate SSL certificates and upload to your API
 name: Generate SSL Certificates
 
-# When to run: manually only (you click the button)
 on:
   workflow_dispatch:
     inputs:
@@ -14,29 +12,22 @@ on:
         required: true
         default: 'Certificate Bot'
 
-# What the workflow does
 jobs:
   generate-and-upload:
     runs-on: ubuntu-latest
-    # If your API runs on localhost, use a self-hosted runner
-    # runs-on: self-hosted
     
     steps:
-      # Step 1: Checkout code (needed for any files we might want to save)
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Step 2: Create directory for certificates
       - name: Create certs directory
         run: mkdir -p certs
 
-      # Step 3: Generate private key
       - name: Generate Private Key
         run: |
           openssl genrsa -out certs/private.key 2048
           echo "✅ Private key generated"
 
-      # Step 4: Generate Certificate Signing Request (CSR)
       - name: Generate CSR
         run: |
           openssl req -new \
@@ -45,7 +36,6 @@ jobs:
             -subj "/C=US/ST=State/L=City/O=EmployeeApp/CN=localhost"
           echo "✅ CSR generated"
 
-      # Step 5: Generate self-signed certificate
       - name: Generate Certificate
         run: |
           openssl x509 -req \
@@ -55,11 +45,9 @@ jobs:
             -out certs/certificate.crt
           echo "✅ Certificate generated (valid for 365 days)"
 
-      # Step 6: Show what was generated
       - name: List generated files
         run: ls -la certs/
 
-      # Step 7: Prepare JSON payload for API
       - name: Create JSON payload
         run: |
           # Base64 encode the files for safe transmission
@@ -79,7 +67,6 @@ jobs:
           EOF
           echo "✅ JSON payload created"
 
-      # Step 8: Upload to your API
       - name: Upload certificates to API
         run: |
           # Change this URL to match where your API is running
@@ -99,15 +86,13 @@ jobs:
           echo "✅ API Response:"
           echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
 
-      # Step 9: Save certificates as artifacts (backup)
       - name: Upload certificates as artifacts
         uses: actions/upload-artifact@v3
         with:
           name: generated-certificates
           path: certs/
-          retention-days: 30  # Keep for 30 days
+          retention-days: 30
 
-      # Step 10: Summary
       - name: Workflow Summary
         run: |
           echo "=================================="
