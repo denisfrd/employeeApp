@@ -39,25 +39,7 @@ public class EmployeeController {
         employee.setDepartment(department);
 
         Employee savedEmployee = employeeRepo.save(employee);
-        return ResponseEntity.ok(savedEmployee);
-    }
-
-    //Uploads certificate
-    @PostMapping("/upload-certificate")
-    public ResponseEntity<Employee> uploadCertificate(
-            @RequestHeader("employeeId") Long employeeId,
-            @RequestHeader("employeeName") String employeeName,
-            @RequestBody Map<String, Object> certificateData){
-
-        Employee employee = new Employee();
-        employee.setEmployeeId(employeeId);
-        employee.setEmployeeName(employeeName);
-        employee.setDepartment("IT-Security");
-
-        Employee savedEmployee = employeeRepo.save(employee);
-
-        return ResponseEntity.ok(savedEmployee);
-
+        return ResponseEntity.ok(employeeRepo.save(employee));
     }
 
     //Fetches all employees
@@ -97,12 +79,12 @@ public class EmployeeController {
     // CERTS
 
     @PostMapping("/{empId}/certs")
-    public ResponseEntity<?> uploadCertificate(@PathVariable Long empId,
+    public ResponseEntity<?> uploadCertificate(@PathVariable Long employeeId,
                                                @RequestBody Map<String, String> data) {
         //Creates or finds employee
-        Employee emp = employeeRepo.findById(empId).orElseGet(() -> {
+        Employee emp = employeeRepo.findById(employeeId).orElseGet(() -> {
             Employee newEmp = new Employee();
-            newEmp.setEmployeeId(empId);
+            newEmp.setEmployeeId(employeeId);
             newEmp.setEmployeeName(data.getOrDefault("name", "Auto Created"));
             newEmp.setDepartment("IT");
             return employeeRepo.save(newEmp);
@@ -121,7 +103,7 @@ public class EmployeeController {
 
         return ResponseEntity.ok(Map.of(
                 "message", "Certificate uploaded successfully",
-                "employeeId", empId,
+                "employeeId", employeeId,
                 "certificateId", cert.getId()
         ));
     }

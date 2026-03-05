@@ -6,7 +6,7 @@ import jakarta.persistence.Id;
 @Entity
 public class Employee {
 
-@Id
+    @Id
     private Long employeeId;
     private String employeeName;
     private String department;

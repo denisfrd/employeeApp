@@ -1,7 +1,6 @@
 package com.employeeapp.employeeapp.entities;
 
 import jakarta.persistence.*;
-
 import java.time.LocalDateTime;
 
 @Entity
@@ -13,16 +12,19 @@ public class Certificate {
     private Long id;
 
     @ManyToOne
-    @JoinColumn(name = "employee_id")
+    @JoinColumn(name = "employeeId")
     private Employee employee;
 
     @Lob
+    @Column(columnDefinition = "TEXT")
     private String privateKey;
 
     @Lob
+    @Column(columnDefinition = "TEXT")
     private String certificate;
 
     @Lob
+    @Column(columnDefinition = "TEXT")
     private String csr;
 
     private String commonName;
@@ -33,7 +35,7 @@ public class Certificate {
         this.uploadedAt = LocalDateTime.now();
     }
 
-    //Getters & Setters
+    // Getters and Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
