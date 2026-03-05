@@ -20,25 +20,13 @@ public class Employee {
         this.department = department;
     }
 
-    //Getters
-    public Long getEmployeeId() {
-        return employeeId;
-    }
-    public String getEmployeeName() {
-        return employeeName;
-    }
-    public String getDepartment() {
-        return department;
-    }
+    //Getters & Setters
+    public Long getEmployeeId() { return employeeId; }
+    public void setEmployeeId(Long employeeId) { this.employeeId = employeeId; }
 
-    //Setters
-    public void setEmployeeId(Long employeeId) {
-        this.employeeId = employeeId;
-    }
-    public void setEmployeeName(String employeeName) {
-        this.employeeName = employeeName;
-    }
-    public void setDepartment(String department) {
-        this.department = department;
-    }
+    public String getEmployeeName() { return employeeName; }
+    public void setEmployeeName(String employeeName) { this.employeeName = employeeName; }
+
+    public String getDepartment() { return department; }
+    public void setDepartment(String department) { this.department = department; }
 }
