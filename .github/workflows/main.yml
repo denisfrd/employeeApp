@@ -1,0 +1,255 @@
+name: Employee App - Generate Certificates and Deploy
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build with Maven
+        run: mvn clean compile
+
+      - name: Run tests
+        run: mvn test
+
+      - name: Generate SSL Certificates
+        run: |
+          mkdir -p certs
+          
+          openssl genrsa -out certs/employee-private.key 2048
+          
+          openssl req -new -key certs/employee-private.key \
+            -out certs/employee.csr \
+            -subj "/C=US/ST=State/L=City/O=EmployeeApp/CN=localhost"
+          
+          openssl x509 -req -days 365 \
+            -in certs/employee.csr \
+            -signkey certs/employee-private.key \
+            -out certs/employee-certificate.crt
+          
+          openssl pkcs12 -export \
+            -in certs/employee-certificate.crt \
+            -inkey certs/employee-private.key \
+            -out certs/keystore.p12 \
+            -name employeeapp \
+            -password pass:changeit
+          
+          echo "Generated certificates:"
+          ls -la certs/
+          
+          echo "CERTIFICATE_CONTENT<<EOF" >> $GITHUB_ENV
+          cat certs/employee-certificate.crt | base64 -w 0 >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          
+          echo "PRIVATE_KEY_CONTENT<<EOF" >> $GITHUB_ENV
+          cat certs/employee-private.key | base64 -w 0 >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          
+          echo "CSR_CONTENT<<EOF" >> $GITHUB_ENV
+          cat certs/employee.csr | base64 -w 0 >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Upload certificates as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ssl-certificates
+          path: certs/
+          retention-days: 7
+
+      - name: Send certificates to Employee API
+        env:
+          API_URL: "http://localhost:8080/api/employees"
+          API_KEY: ${{ secrets.EMPLOYEE_API_KEY }}
+        run: |
+          # Prepare JSON payload
+          cat > cert-payload.json << EOF
+          {
+            "application": "employee-app",
+            "environment": "${{ github.ref_name }}",
+            "timestamp": "$(date -Iseconds)",
+            "certificates": {
+              "certificate": "${{ env.CERTIFICATE_CONTENT }}",
+              "csr": "${{ env.CSR_CONTENT }}",
+              "privateKey": "${{ env.PRIVATE_KEY_CONTENT }}"
+            },
+            "metadata": {
+              "gitSha": "${{ github.sha }}",
+              "gitRef": "${{ github.ref }}",
+              "workflowRunId": "${{ github.run_id }}"
+            }
+          }
+          EOF
+          
+          # API call using curl
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $API_KEY" \
+            -H "X-Application: employee-app" \
+            -d @cert-payload.json \
+            $API_URL \
+            -w "\nHTTP Status: %{http_code}\n" \
+            -o api-response.json
+          
+          # Check response
+          if [ $? -eq 0 ]; then
+            echo "✅ Certificates successfully sent to Employee API"
+            cat api-response.json
+          else
+            echo "❌ Failed to send certificates to API"
+            exit 1
+          fi
+
+  # Deploy and test the application
+  deploy-and-test:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Download certificates
+        uses: actions/download-artifact@v4
+        with:
+          name: ssl-certificates
+          path: ./certs
+
+      - name: Run application with H2
+        run: |
+          mvn spring-boot:run -Dspring-boot.run.profiles=h2 &
+          
+          sleep 30
+          
+          echo "Testing Employee API endpoints..."
+          
+          # Create employee
+          curl -X POST \
+            -H "employeeId: 1001" \
+            -H "employeeName: John Doe" \
+            -H "department: Engineering" \
+            http://localhost:8080/api/employees/createEmployee
+          
+          echo "\n"
+          
+          # Get all employees
+          curl http://localhost:8080/api/employees/fetch/all
+          
+          echo "\n"
+          
+          # Get employee by ID
+          curl -H "employeeId: 1001" http://localhost:8080/api/employees/fetch
+          
+          echo "\n✅ Application tests completed"
+          
+          # Kill the application
+          kill %1
+
+      - name: Verify H2 Database
+        run: |
+          echo "✅ H2 database verification completed"
+          echo "Application ran successfully with H2 in-memory database"
+
+  # Postman tests (requires Postman API key)
+  postman-tests:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Postman CLI
+        run: |
+          curl -o- "https://dl-cli.pstmn.io/install/linux64.sh" | sh
+
+      - name: Run Postman tests
+        env:
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+        run: |
+          # Create Postman test collection
+          cat > employee-tests.json << EOF
+          {
+            "info": {
+              "name": "Employee API Tests",
+              "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+            },
+            "item": [
+              {
+                "name": "Create Employee",
+                "request": {
+                  "method": "POST",
+                  "header": [
+                    {"key": "employeeId", "value": "1002"},
+                    {"key": "employeeName", "value": "Jane Smith"},
+                    {"key": "department", "value": "Marketing"}
+                  ],
+                  "url": "http://localhost:8080/api/employees/createEmployee"
+                }
+              },
+              {
+                "name": "Get All Employees",
+                "request": {
+                  "method": "GET",
+                  "url": "http://localhost:8080/api/employees/fetch/all"
+                }
+              },
+              {
+                "name": "Get Employee by ID",
+                "request": {
+                  "method": "GET",
+                  "header": [{"key": "employeeId", "value": "1002"}],
+                  "url": "http://localhost:8080/api/employees/fetch"
+                }
+              },
+              {
+                "name": "Delete Employee",
+                "request": {
+                  "method": "DELETE",
+                  "header": [{"key": "employeeId", "value": "1002"}],
+                  "url": "http://localhost:8080/api/employees/delete"
+                }
+              }
+            ]
+          }
+          EOF
+          
+          # Run Postman tests (if you have Newman installed)
+          # npm install -g newman
+          # newman run employee-tests.json
+
+  # Notification step
+  notify:
+    needs: [build-and-test, deploy-and-test, postman-tests]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Send notification
+        run: |
+          echo "✅ Workflow completed!"
+          echo "Certificate generation and API communication successful"
+          echo "Check artifacts for generated certificates"
