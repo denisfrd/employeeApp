@@ -418,34 +418,6 @@ jobs:
           kill ${{ env.APP_PID }} 2>/dev/null || true
 
   notify:
-    needs: [build-and-test, deploy-and-test, postman-tests, verify-certificates]
-    runs-on: ubuntu-latest
-    if: always()
-    
-    steps:
-      - name: Download verification results
-        uses: actions/download-artifact@v4
-        with:
-          name: certificate-verification-results
-          path: ./verification
-
-      - name: Send notification with results
-        run: |
-          echo "========================================="
-          echo "WORKFLOW COMPLETED WITH VERIFICATION"
-          echo "========================================="
-          
-          if [ -f verification/verification-results.json ]; then
-            CERT_COUNT=$(jq '. | length' verification/verification-results.json)
-            echo "✅ Certificates verified: $CERT_COUNT certificate(s) stored in H2"
-            echo "📊 Verification results saved as artifact"
-          else
-            echo "❌ Certificate verification failed or no results found"
-          fi
-          
-          echo "========================================="
-
-  notify:
     needs: [build-and-test, deploy-and-test, postman-tests]
     runs-on: ubuntu-latest
     if: always()
