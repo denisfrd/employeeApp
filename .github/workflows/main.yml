@@ -131,7 +131,7 @@ jobs:
   deploy-and-test:
     needs: build-and-test
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: always()
     
     steps:
       - name: Checkout code
