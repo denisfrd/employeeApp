@@ -11,7 +11,13 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @RestController
@@ -149,5 +155,128 @@ public class CertificateController {
         dto.setExpiresAt(certificate.getExpiresAt());
         dto.setCertificateType(certificate.getCertificateType());
         return dto;
+    }
+
+    // Endpoint to check if certificate exists for an employee
+    @GetMapping("/check/{employeeId}")
+    public ResponseEntity<Map<String, Object>> checkCertificateExists(@PathVariable Long employeeId) {
+        Optional<Certificate> certificate = certificateRepo.findByEmployeeId(employeeId);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("employeeId", employeeId);
+        response.put("certificateExists", certificate.isPresent());
+
+        if (certificate.isPresent()) {
+            Certificate cert = certificate.get();
+            response.put("certificateId", cert.getId());
+            response.put("generatedAt", cert.getGeneratedAt());
+            response.put("expiresAt", cert.getExpiresAt());
+            response.put("isActive", cert.getIsActive());
+            response.put("certificateType", cert.getCertificateType());
+            response.put("certificatePreview",
+                    cert.getCertificateData() != null ?
+                            cert.getCertificateData().substring(0, Math.min(100, cert.getCertificateData().length())) + "..." :
+                            null);
+        }
+
+        return ResponseEntity.ok(response);
+    }
+
+    // Get all certificates in database
+    @GetMapping("/all")
+    public ResponseEntity<List<Map<String, Object>>> getAllCertificates() {
+        List<Certificate> certificates = certificateRepo.findAll();
+
+        List<Map<String, Object>> response = certificates.stream().map(cert -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", cert.getId());
+            map.put("employeeId", cert.getEmployee().getEmployeeId());
+            map.put("employeeName", cert.getEmployee().getEmployeeName());
+            map.put("generatedAt", cert.getGeneratedAt());
+            map.put("expiresAt", cert.getExpiresAt());
+            map.put("isActive", cert.getIsActive());
+            map.put("certificateType", cert.getCertificateType());
+            map.put("hasCertificate", cert.getCertificateData() != null);
+            map.put("hasPrivateKey", cert.getPrivateKey() != null);
+            map.put("hasCsr", cert.getCsr() != null);
+            map.put("certificateSize",
+                    cert.getCertificateData() != null ? cert.getCertificateData().length() : 0);
+            return map;
+        }).collect(Collectors.toList());
+
+        return ResponseEntity.ok(response);
+    }
+
+    // Verify certificate details
+    @GetMapping("/verify/{certificateId}")
+    public ResponseEntity<Map<String, Object>> verifyCertificate(@PathVariable Long certificateId) {
+        return certificateRepo.findById(certificateId)
+                .map(cert -> {
+                    Map<String, Object> verification = new HashMap<>();
+                    verification.put("id", cert.getId());
+                    verification.put("employeeId", cert.getEmployee().getEmployeeId());
+                    verification.put("isValid", cert.getIsActive() &&
+                            cert.getExpiresAt().isAfter(LocalDateTime.now()));
+                    verification.put("expiresIn",
+                            ChronoUnit.DAYS.between(LocalDateTime.now(), cert.getExpiresAt()) + " days");
+                    verification.put("certificateFormat", detectCertificateFormat(cert.getCertificateData()));
+                    verification.put("privateKeyFormat", detectKeyFormat(cert.getPrivateKey()));
+
+                    // Parse certificate to get details
+                    try {
+                        if (cert.getCertificateData() != null) {
+                            String certData = cert.getCertificateData();
+                            // Look for common certificate fields
+                            if (certData.contains("BEGIN CERTIFICATE")) {
+                                verification.put("type", "X.509");
+                                // Extract subject if possible
+                                Pattern subjectPattern = Pattern.compile("Subject: (.*?)(?=\\n|$)");
+                                Matcher matcher = subjectPattern.matcher(certData);
+                                if (matcher.find()) {
+                                    verification.put("subject", matcher.group(1));
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        verification.put("parseError", e.getMessage());
+                    }
+
+                    return ResponseEntity.ok(verification);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    // Count certificates by status
+    @GetMapping("/stats")
+    public ResponseEntity<Map<String, Object>> getCertificateStats() {
+        List<Certificate> all = certificateRepo.findAll();
+        long active = certificateRepo.findByIsActiveTrue().size();
+        long expired = certificateRepo.findExpiredCertificates().size();
+
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalCertificates", all.size());
+        stats.put("activeCertificates", active);
+        stats.put("expiredCertificates", expired);
+        stats.put("certificatesByEmployee", all.stream()
+                .collect(Collectors.groupingBy(
+                        cert -> cert.getEmployee().getEmployeeId(),
+                        Collectors.counting()
+                )));
+
+        return ResponseEntity.ok(stats);
+    }
+
+    private String detectCertificateFormat(String certData) {
+        if (certData == null) return "NONE";
+        if (certData.contains("BEGIN CERTIFICATE")) return "PEM";
+        if (certData.startsWith("MII") || certData.matches("^[A-Za-z0-9+/=]+$")) return "BASE64";
+        return "UNKNOWN";
+    }
+
+    private String detectKeyFormat(String keyData) {
+        if (keyData == null) return "NONE";
+        if (keyData.contains("BEGIN PRIVATE KEY")) return "PEM PKCS#8";
+        if (keyData.contains("BEGIN RSA PRIVATE KEY")) return "PEM RSA";
+        return "UNKNOWN";
     }
 }
