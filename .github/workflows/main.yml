@@ -304,6 +304,38 @@ jobs:
                 }
               }
             ]
+
+      - name: Verify Certificate Upload
+        run: |
+          echo "========================================="
+          echo "Verifying Certificate Upload"
+          echo "========================================="
+          
+          # Wait a moment for processing
+          sleep 5
+          
+          # Check if certificate was stored
+          curl -s -X GET \
+            -H "Content-Type: application/json" \
+            "http://localhost:8080/api/certificates/check/1001" | jq .
+          
+          # Get all certificates
+          echo -e "\nAll certificates in database:"
+          curl -s "http://localhost:8080/api/certificates/all" | jq .
+          
+          # Get statistics
+          echo -e "\nCertificate statistics:"
+          curl -s "http://localhost:8080/api/certificates/stats" | jq .
+          
+          # Verify certificate exists
+          CERT_COUNT=$(curl -s "http://localhost:8080/api/certificates/all" | jq '. | length')
+          if [ "$CERT_COUNT" -gt 0 ]; then
+            echo "✅ Certificates successfully stored in H2 database (Count: $CERT_COUNT)"
+          else
+            echo "❌ No certificates found in database"
+            exit 1
+          fi
+            
           }
           EOF
           
