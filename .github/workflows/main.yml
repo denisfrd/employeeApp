@@ -33,24 +33,24 @@ jobs:
 
       - name: Generate SSL Certificates
         run: |
-          # Create directory for certificates
+          #Creates directory for certificates
           mkdir -p certs
           
-          # Generate private key
+          #Generates private key
           openssl genrsa -out certs/employee-private.key 2048
           
-          # Generate CSR
+          #Generates CSR
           openssl req -new -key certs/employee-private.key \
             -out certs/employee.csr \
             -subj "/C=US/ST=State/L=City/O=EmployeeApp/CN=localhost"
           
-          # Generate self-signed certificate
+          #Generates self-signed certificate
           openssl x509 -req -days 365 \
             -in certs/employee.csr \
             -signkey certs/employee-private.key \
             -out certs/employee-certificate.crt
           
-          # Generate PKCS12 keystore
+          #PKCS12 keystore
           openssl pkcs12 -export \
             -in certs/employee-certificate.crt \
             -inkey certs/employee-private.key \
@@ -58,11 +58,11 @@ jobs:
             -name employeeapp \
             -password pass:changeit
           
-          # Display generated files
+          #Displays generated files
           echo "Generated certificates:"
           ls -la certs/
           
-          # Save certificate content to files for later steps
+          #Saves certificate content
           cat certs/employee-certificate.crt | base64 -w 0 > certs/certificate.b64
           cat certs/employee-private.key | base64 -w 0 > certs/privatekey.b64
           cat certs/employee.csr | base64 -w 0 > certs/csr.b64
@@ -85,7 +85,7 @@ jobs:
           API_URL: "http://localhost:8080/api/employees/"
           API_KEY: ${{ secrets.EMPLOYEE_API_KEY }}
         run: |
-          # Create JSON payload file
+          #Creates JSON payload
           cat > cert-payload.json << 'EOF'
           {
             "application": "employee-app",
@@ -104,12 +104,12 @@ jobs:
           }
           EOF
           
-          # Replace the variables in the JSON file
+          #Replaces the variables in JSON
           sed -i "s|\${{ env.CERTIFICATE_B64 }}|${{ env.CERTIFICATE_B64 }}|g" cert-payload.json
           sed -i "s|\${{ env.CSR_B64 }}|${{ env.CSR_B64 }}|g" cert-payload.json
           sed -i "s|\${{ env.PRIVATE_KEY_B64 }}|${{ env.PRIVATE_KEY_B64 }}|g" cert-payload.json
           
-          # Make API call using curl
+          #Makes API curl call
           echo "Sending certificates to API..."
           curl -X POST \
             -H "Content-Type: application/json" \
@@ -120,7 +120,7 @@ jobs:
             -w "\nHTTP Status: %{http_code}\n" \
             -o api-response.json || true
           
-          # Check response
+          #Checks response
           if [ -f api-response.json ]; then
             echo "✅ API Response received:"
             cat api-response.json
@@ -153,42 +153,42 @@ jobs:
         run: |
           mkdir -p src/main/resources
           cat > src/main/resources/application-h2.properties << 'EOF'
-          # H2 Database Configuration
+          #H2 Database
           spring.datasource.url=jdbc:h2:mem:employeedb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
           spring.datasource.driverClassName=org.h2.Driver
           spring.datasource.username=sa
           spring.datasource.password=
           
-          # JPA Configuration
+          #JPA
           spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
           spring.jpa.hibernate.ddl-auto=update
           spring.jpa.show-sql=true
           spring.jpa.properties.hibernate.format_sql=true
           
-          # H2 Console
+          #H2 Console
           spring.h2.console.enabled=true
           spring.h2.console.path=/h2-console
           
-          # Server Configuration
+          #Server
           server.port=8080
           EOF
 
       - name: Run application with H2
         run: |
-          # Start application in background
+          #Starts application
           mvn spring-boot:run -Dspring-boot.run.profiles=h2 -Dspring-boot.run.jvmArguments="-Xmx512m" &
           APP_PID=$!
           
-          # Wait for application to start
+          #Wait for application to start
           echo "Waiting for application to start..."
-          sleep 45
+          sleep 10
           
-          # Test the application using curl
+          #Tests the application using curl
           echo "========================================="
           echo "Testing Employee API endpoints..."
           echo "========================================="
           
-          # Create employee
+          #Creates employee
           echo -e "\n1. Creating employee..."
           curl -s -X POST \
             -H "employeeId: 1001" \
@@ -212,7 +212,7 @@ jobs:
           echo "✅ Application tests completed"
           echo "========================================="
           
-          # Kill the application
+          #Kills application
           kill $APP_PID 2>/dev/null || true
 
       - name: Verify H2 Database
@@ -241,7 +241,7 @@ jobs:
 
       - name: Run application for Postman tests
         run: |
-          # Create test properties
+          #Creates test properties
           mkdir -p src/main/resources
           cat > src/main/resources/application-test.properties << 'EOF'
           spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
@@ -253,14 +253,14 @@ jobs:
           server.port=8080
           EOF
           
-          # Start application
+          #Starts application
           mvn spring-boot:run -Dspring-boot.run.profiles=test -Dspring-boot.run.jvmArguments="-Xmx512m" &
           APP_PID=$!
           
-          # Wait for app to start
-          sleep 45
+          #Waits for app to start
+          sleep 10
           
-          # Create Postman test collection
+          #Creates Postman test collection
           cat > postman_collection.json << 'EOF'
           {
             "info": {
@@ -307,10 +307,10 @@ jobs:
           }
           EOF
           
-          # Run Postman tests with Newman
+          #Runs Postman tests with Newman
           newman run postman_collection.json || echo "Postman tests completed with issues"
           
-          # Kill the application
+          #Kills application
           kill $APP_PID 2>/dev/null || true
 
   verify-certificates:
@@ -336,7 +336,7 @@ jobs:
   
       - name: Start application for verification
         run: |
-          # Create H2 properties
+          #Creates H2 properties
           mkdir -p src/main/resources
           cat > src/main/resources/application-h2.properties << 'EOF'
           spring.datasource.url=jdbc:h2:mem:employeedb;DB_CLOSE_DELAY=-1
@@ -349,13 +349,13 @@ jobs:
           server.port=8080
           EOF
           
-          # Start application
+          #Starts application
           mvn spring-boot:run -Dspring-boot.run.profiles=h2 -Dspring-boot.run.jvmArguments="-Xmx512m" &
           APP_PID=$!
           echo "APP_PID=$APP_PID" >> $GITHUB_ENV
           
-          # Wait for startup
-          sleep 45
+          #Waits for startup
+          sleep 10
   
       - name: Verify Certificate Storage
         run: |
@@ -366,7 +366,7 @@ jobs:
           echo "CERTIFICATE VERIFICATION REPORT"
           echo "========================================="
           
-          # Create test employee if needed
+          #Creates test employee
           echo "Creating test employee..."
           curl -s -X POST \
             -H "employeeId: 9999" \
@@ -374,7 +374,7 @@ jobs:
             -H "department: QA" \
             http://localhost:8080/api/employees/createEmployee
           
-          # Upload the generated certificate
+          #Uploads the generated certificate
           echo "Uploading certificate from GitHub Actions..."
           CERTIFICATE=$(cat certs/employee-certificate.crt | jq -s -R .)
           PRIVATE_KEY=$(cat certs/employee-private.key | jq -s -R .)
@@ -391,7 +391,7 @@ jobs:
             }" \
             http://localhost:8080/api/certificates/upload
           
-          # Verify storage
+          #Verifies storage
           echo -e "\n1. Certificate check for employee 9999:"
           curl -s http://localhost:8080/api/certificates/check/9999 | jq .
           
@@ -401,7 +401,7 @@ jobs:
           echo -e "\n3. Certificate statistics:"
           curl -s http://localhost:8080/api/certificates/stats | jq .
           
-          # Export results
+          #Exports results
           curl -s http://localhost:8080/api/certificates/all > verification-results.json
           
           echo -e "\n✅ Verification complete. Results saved to verification-results.json"
@@ -428,10 +428,10 @@ jobs:
           echo "========================================="
           echo "✅ WORKFLOW COMPLETED!"
           echo "========================================="
-          echo "✓ Certificate generation successful"
-          echo "✓ Certificates saved as artifacts"
-          echo "✓ API communication completed"
-          echo "✓ H2 database tests passed"
+          echo "Certificate generation successful"
+          echo "Certificates saved as artifacts"
+          echo "API communication completed"
+          echo "H2 database tests passed"
           echo "========================================="
           
           # Create summary
