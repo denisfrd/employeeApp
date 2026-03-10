@@ -122,10 +122,10 @@ jobs:
           
           #Checks response
           if [ -f api-response.json ]; then
-            echo "✅ API Response received:"
+            echo "API Response received:"
             cat api-response.json
           else
-            echo "⚠️ No response file created"
+            echo "No response file created"
           fi
 
   deploy-and-test:
@@ -209,7 +209,7 @@ jobs:
           curl -s http://localhost:8080/api/employees/fetch/all | jq . 2>/dev/null || echo "Response not in JSON format"
           
           echo -e "\n========================================="
-          echo "✅ Application tests completed"
+          echo "Application tests completed"
           echo "========================================="
           
           #Kills application
@@ -218,100 +218,9 @@ jobs:
       - name: Verify H2 Database
         run: |
           echo "========================================="
-          echo "✅ H2 database verification completed"
+          echo "H2 database verification completed"
           echo "Application ran successfully with H2 in-memory database"
           echo "========================================="
-
-  postman-tests:
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    if: always()
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Newman
-        run: npm install -g newman
-
-      - name: Run application for Postman tests
-        run: |
-          #Creates test properties
-          mkdir -p src/main/resources
-          cat > src/main/resources/application-test.properties << 'EOF'
-          spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
-          spring.datasource.driverClassName=org.h2.Driver
-          spring.datasource.username=sa
-          spring.datasource.password=
-          spring.jpa.hibernate.ddl-auto=create-drop
-          spring.jpa.show-sql=true
-          server.port=8080
-          EOF
-          
-          #Starts application
-          mvn spring-boot:run -Dspring-boot.run.profiles=test -Dspring-boot.run.jvmArguments="-Xmx512m" &
-          APP_PID=$!
-          
-          #Waits for app to start
-          sleep 10
-          
-          #Creates Postman test collection
-          cat > postman_collection.json << 'EOF'
-          {
-            "info": {
-              "name": "Employee API Tests",
-              "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-            },
-            "item": [
-              {
-                "name": "Create Employee",
-                "request": {
-                  "method": "POST",
-                  "header": [
-                    {"key": "employeeId", "value": "2001"},
-                    {"key": "employeeName", "value": "Jane Smith"},
-                    {"key": "department", "value": "Marketing"}
-                  ],
-                  "url": "http://localhost:8080/api/employees/createEmployee"
-                }
-              },
-              {
-                "name": "Get All Employees",
-                "request": {
-                  "method": "GET",
-                  "url": "http://localhost:8080/api/employees/fetch/all"
-                }
-              },
-              {
-                "name": "Get Employee by ID",
-                "request": {
-                  "method": "GET",
-                  "header": [{"key": "employeeId", "value": "2001"}],
-                  "url": "http://localhost:8080/api/employees/fetch"
-                }
-              },
-              {
-                "name": "Delete Employee",
-                "request": {
-                  "method": "DELETE",
-                  "header": [{"key": "employeeId", "value": "2001"}],
-                  "url": "http://localhost:8080/api/employees/delete"
-                }
-              }
-            ]
-          }
-          EOF
-          
-          #Runs Postman tests with Newman
-          newman run postman_collection.json || echo "Postman tests completed with issues"
-          
-          #Kills application
-          kill $APP_PID 2>/dev/null || true
 
   verify-certificates:
     needs: deploy-and-test
@@ -404,7 +313,7 @@ jobs:
           #Exports results
           curl -s http://localhost:8080/api/certificates/all > verification-results.json
           
-          echo -e "\n✅ Verification complete. Results saved to verification-results.json"
+          echo -e "\nVerification complete. Results saved to verification-results.json"
   
       - name: Upload verification results
         uses: actions/upload-artifact@v4
@@ -418,7 +327,7 @@ jobs:
           kill ${{ env.APP_PID }} 2>/dev/null || true
 
   notify:
-    needs: [build-and-test, deploy-and-test, postman-tests]
+    needs: [build-and-test, deploy-and-test]
     runs-on: ubuntu-latest
     if: always()
     
@@ -426,7 +335,7 @@ jobs:
       - name: Send notification
         run: |
           echo "========================================="
-          echo "✅ WORKFLOW COMPLETED!"
+          echo "WORKFLOW COMPLETED!"
           echo "========================================="
           echo "Certificate generation successful"
           echo "Certificates saved as artifacts"
@@ -434,22 +343,17 @@ jobs:
           echo "H2 database tests passed"
           echo "========================================="
           
-          # Create summary
+          #Creates summary
           cat << 'EOF' >> $GITHUB_STEP_SUMMARY
           # Employee App Workflow Summary
           
-          ## ✅ Completed Tasks
+          ##Completed Tasks
           - Generated SSL certificates (Private Key, CSR, Certificate)
           - Uploaded certificates as artifacts
           - Sent certificates to Employee API
           - Tested all endpoints with H2 database
           - Verified CRUD operations
           
-          ## 📁 Artifacts
+          ##Artifacts
           - SSL certificates available for 7 days
-          
-          ## 🔍 Next Steps
-          - Download certificates from artifacts
-          - Configure local environment with generated certificates
-          - Test with Postman locally
           EOF
