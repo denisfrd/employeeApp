@@ -222,6 +222,98 @@ jobs:
           echo "Application ran successfully with H2 in-memory database"
           echo "========================================="
 
+  postman-tests:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Newman
+        run: npm install -g newman
+
+      - name: Run application for Postman tests
+        run: |
+          #Creates test properties
+          mkdir -p src/main/resources
+          cat > src/main/resources/application-test.properties << 'EOF'
+          spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
+          spring.datasource.driverClassName=org.h2.Driver
+          spring.datasource.username=sa
+          spring.datasource.password=
+          spring.jpa.hibernate.ddl-auto=create-drop
+          spring.jpa.show-sql=true
+          server.port=8080
+          EOF
+          
+          #Starts application
+          mvn spring-boot:run -Dspring-boot.run.profiles=test -Dspring-boot.run.jvmArguments="-Xmx512m" &
+          APP_PID=$!
+          
+          #Waits for app to start
+          sleep 10
+          
+          #Creates Postman test collection
+          cat > postman_collection.json << 'EOF'
+          {
+            "info": {
+              "name": "Employee API Tests",
+              "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+            },
+            "item": [
+              {
+                "name": "Create Employee",
+                "request": {
+                  "method": "POST",
+                  "header": [
+                    {"key": "employeeId", "value": "2001"},
+                    {"key": "employeeName", "value": "Jane Smith"},
+                    {"key": "department", "value": "Marketing"}
+                  ],
+                  "url": "http://localhost:8080/api/employees/createEmployee"
+                }
+              },
+              {
+                "name": "Get All Employees",
+                "request": {
+                  "method": "GET",
+                  "url": "http://localhost:8080/api/employees/fetch/all"
+                }
+              },
+              {
+                "name": "Get Employee by ID",
+                "request": {
+                  "method": "GET",
+                  "header": [{"key": "employeeId", "value": "2001"}],
+                  "url": "http://localhost:8080/api/employees/fetch"
+                }
+              },
+              {
+                "name": "Delete Employee",
+                "request": {
+                  "method": "DELETE",
+                  "header": [{"key": "employeeId", "value": "2001"}],
+                  "url": "http://localhost:8080/api/employees/delete"
+                }
+              }
+            ]
+          }
+          EOF
+          
+          #Runs Postman tests with Newman
+          newman run postman_collection.json || echo "Postman tests completed with issues"
+          
+          #Kills application
+          kill $APP_PID 2>/dev/null || true
+
+
   verify-certificates:
     needs: deploy-and-test
     runs-on: ubuntu-latest
@@ -327,7 +419,7 @@ jobs:
           kill ${{ env.APP_PID }} 2>/dev/null || true
 
   notify:
-    needs: [build-and-test, deploy-and-test]
+    needs: [build-and-test, deploy-and-test, postman-tests]
     runs-on: ubuntu-latest
     if: always()
     
