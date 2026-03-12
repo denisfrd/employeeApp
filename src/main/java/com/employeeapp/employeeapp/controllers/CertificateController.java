@@ -5,7 +5,7 @@ import com.employeeapp.employeeapp.entities.Certificate;
 import com.employeeapp.employeeapp.entities.Employee;
 import com.employeeapp.employeeapp.repositories.CertificateRepository;
 import com.employeeapp.employeeapp.repositories.EmployeeRepository;
-import com.employeeapp.employeeapp.service.CertificateService;
+import com.employeeapp.employeeapp.services.CertificateService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
