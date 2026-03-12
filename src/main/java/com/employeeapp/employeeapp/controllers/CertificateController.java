@@ -5,7 +5,7 @@ import com.employeeapp.employeeapp.entities.Certificate;
 import com.employeeapp.employeeapp.entities.Employee;
 import com.employeeapp.employeeapp.repositories.CertificateRepository;
 import com.employeeapp.employeeapp.repositories.EmployeeRepository;
-import com.employeeapp.employeeapp.services.CertificateService;
+import com.employeeapp.employeeapp.service.CertificateService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -36,7 +36,7 @@ public class CertificateController {
         this.certificateService = certificateService;
     }
 
-    // Receive certificates from GitHub Actions
+    //Receives certificates from GitHub Actions
     @PostMapping("/upload")
     public ResponseEntity<Certificate> uploadCertificate(@RequestBody CertificateDTO certificateDTO) {
         try {
@@ -60,7 +60,7 @@ public class CertificateController {
         }
     }
 
-    // Get certificate by employee ID
+    //Fetches certificate by employee ID
     @GetMapping("/employee/{employeeId}")
     public ResponseEntity<CertificateDTO> getCertificateByEmployee(@PathVariable Long employeeId) {
         return certificateRepo.findByEmployeeId(employeeId)
@@ -69,7 +69,7 @@ public class CertificateController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // Download certificate
+    //Downloads certificate
     @GetMapping("/{id}/download")
     public ResponseEntity<String> downloadCertificate(@PathVariable Long id) {
         return certificateRepo.findById(id)
@@ -79,7 +79,7 @@ public class CertificateController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // Download private key
+    //Downloads private key
     @GetMapping("/{id}/download-key")
     public ResponseEntity<String> downloadPrivateKey(@PathVariable Long id) {
         return certificateRepo.findById(id)
@@ -89,7 +89,7 @@ public class CertificateController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // Get all active certificates
+    //Fetches all active certificates
     @GetMapping("/active")
     public List<CertificateDTO> getAllActiveCertificates() {
         return certificateRepo.findByIsActiveTrue().stream()
@@ -97,7 +97,7 @@ public class CertificateController {
                 .collect(Collectors.toList());
     }
 
-    // Get expired certificates
+    //Fetches expired certificates
     @GetMapping("/expired")
     public List<CertificateDTO> getExpiredCertificates() {
         return certificateRepo.findExpiredCertificates().stream()
@@ -105,7 +105,7 @@ public class CertificateController {
                 .collect(Collectors.toList());
     }
 
-    // Revoke certificate
+    //Revokes certificate
     @PostMapping("/{id}/revoke")
     public ResponseEntity<Void> revokeCertificate(@PathVariable Long id) {
         return certificateRepo.findById(id)
@@ -117,12 +117,11 @@ public class CertificateController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // Generate new certificate for employee
+    //Generates new certificate for employee
     @PostMapping("/generate/{employeeId}")
     public ResponseEntity<CertificateDTO> generateCertificate(@PathVariable Long employeeId) {
         try {
-            Employee employee = employeeRepo.findById(employeeId)
-                    .orElseThrow(() -> new RuntimeException("Employee not found"));
+            Employee employee = employeeRepo.findById(employeeId).orElseThrow(() -> new RuntimeException("Employee not found"));
 
             Certificate certificate = certificateService.generateCertificate(employee);
             return ResponseEntity.ok(convertToDTO(certificate));
@@ -131,7 +130,7 @@ public class CertificateController {
         }
     }
 
-    // Upload certificate file
+    //Uploads certificate
     @PostMapping("/upload-file")
     public ResponseEntity<String> uploadCertificateFile(
             @RequestParam("employeeId") Long employeeId,
@@ -145,6 +144,7 @@ public class CertificateController {
         }
     }
 
+    //Converts to DTO
     private CertificateDTO convertToDTO(Certificate certificate) {
         CertificateDTO dto = new CertificateDTO();
         dto.setEmployeeId(certificate.getEmployee().getEmployeeId());
@@ -157,11 +157,12 @@ public class CertificateController {
         return dto;
     }
 
-    // Endpoint to check if certificate exists for an employee
+    //Checks if certificate exists for an employee
     @GetMapping("/check/{employeeId}")
     public ResponseEntity<Map<String, Object>> checkCertificateExists(@PathVariable Long employeeId) {
         Optional<Certificate> certificate = certificateRepo.findByEmployeeId(employeeId);
 
+        //Response object
         Map<String, Object> response = new HashMap<>();
         response.put("employeeId", employeeId);
         response.put("certificateExists", certificate.isPresent());
@@ -182,7 +183,7 @@ public class CertificateController {
         return ResponseEntity.ok(response);
     }
 
-    // Get all certificates in database
+    //Fetches all certificates in database
     @GetMapping("/all")
     public ResponseEntity<List<Map<String, Object>>> getAllCertificates() {
         List<Certificate> certificates = certificateRepo.findAll();
@@ -207,7 +208,7 @@ public class CertificateController {
         return ResponseEntity.ok(response);
     }
 
-    // Verify certificate details
+    //Verifies certificate details
     @GetMapping("/verify/{certificateId}")
     public ResponseEntity<Map<String, Object>> verifyCertificate(@PathVariable Long certificateId) {
         return certificateRepo.findById(certificateId)
@@ -222,14 +223,14 @@ public class CertificateController {
                     verification.put("certificateFormat", detectCertificateFormat(cert.getCertificateData()));
                     verification.put("privateKeyFormat", detectKeyFormat(cert.getPrivateKey()));
 
-                    // Parse certificate to get details
+                    //Parses certificate to get details
                     try {
                         if (cert.getCertificateData() != null) {
                             String certData = cert.getCertificateData();
-                            // Look for common certificate fields
+                            //Looks for common certificate fields
                             if (certData.contains("BEGIN CERTIFICATE")) {
                                 verification.put("type", "X.509");
-                                // Extract subject if possible
+                                //Extracts subject if possible
                                 Pattern subjectPattern = Pattern.compile("Subject: (.*?)(?=\\n|$)");
                                 Matcher matcher = subjectPattern.matcher(certData);
                                 if (matcher.find()) {
@@ -242,11 +243,10 @@ public class CertificateController {
                     }
 
                     return ResponseEntity.ok(verification);
-                })
-                .orElse(ResponseEntity.notFound().build());
+                }).orElse(ResponseEntity.notFound().build());
     }
 
-    // Count certificates by status
+    //Counts certificates by status
     @GetMapping("/stats")
     public ResponseEntity<Map<String, Object>> getCertificateStats() {
         List<Certificate> all = certificateRepo.findAll();

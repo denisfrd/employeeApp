@@ -1,4 +1,4 @@
-package com.employeeapp.employeeapp.services;
+package com.employeeapp.employeeapp.service;
 
 import com.employeeapp.employeeapp.entities.Certificate;
 import com.employeeapp.employeeapp.entities.Employee;
