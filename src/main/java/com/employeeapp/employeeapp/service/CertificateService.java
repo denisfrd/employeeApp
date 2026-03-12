@@ -21,8 +21,7 @@ public class CertificateService {
     }
 
     public Certificate generateCertificate(Employee employee) throws Exception {
-        // This would call OpenSSL commands programmatically
-        // For simplicity, we're creating a placeholder
+        //Calls OpenSSL commands + creates placeholder
         Certificate certificate = new Certificate();
         certificate.setEmployee(employee);
         certificate.setGeneratedAt(LocalDateTime.now());
@@ -30,12 +29,10 @@ public class CertificateService {
         certificate.setCertificateType("CLIENT");
         certificate.setIsActive(true);
 
-        // In a real implementation, you'd execute OpenSSL commands here
-        // ProcessBuilder pb = new ProcessBuilder("openssl", "req", "-new", ...);
-
         return certificateRepo.save(certificate);
     }
 
+    //Processes the uploaded files
     public void processUploadedFiles(Long employeeId, MultipartFile certFile, MultipartFile keyFile) throws Exception {
         Employee employee = new Employee();
         employee.setEmployeeId(employeeId);

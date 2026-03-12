@@ -28,10 +28,10 @@ public class Certificate {
     private String certificateType; // CLIENT, SERVER, CA
     private Boolean isActive = true;
 
-    // Constructors
+    //Constructors
     public Certificate() {}
 
-    // Getters and Setters
+    //Getters and Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 

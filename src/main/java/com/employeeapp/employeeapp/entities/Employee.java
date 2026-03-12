@@ -13,7 +13,6 @@ public class Employee {
     private String employeeName;
     private String department;
 
-    // New certificate fields
     @Lob
     private String certificate;
 
@@ -35,7 +34,7 @@ public class Employee {
         this.department = department;
     }
 
-    // Existing getters/setters
+    //Getters/setters
     public Long getEmployeeId() { return employeeId; }
     public void setEmployeeId(Long employeeId) { this.employeeId = employeeId; }
 
@@ -45,7 +44,6 @@ public class Employee {
     public String getDepartment() { return department; }
     public void setDepartment(String department) { this.department = department; }
 
-    // New getters/setters
     public String getCertificate() { return certificate; }
     public void setCertificate(String certificate) { this.certificate = certificate; }
 

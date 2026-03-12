@@ -1,5 +1,3 @@
-Finished on 22/02/2026
-
 Postman was used to test API functionality through the use of Headers
 
 1) Create employee

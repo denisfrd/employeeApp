@@ -52,7 +52,7 @@ public class EmployeeController {
             return ResponseEntity.notFound().build();
         }
 
-        // Also delete associated certificates
+        //Deletes associated certificates
         certificateRepo.findByEmployeeId(employeeId).ifPresent(certificateRepo::delete);
 
         employeeRepo.deleteById(employeeId);
@@ -61,12 +61,13 @@ public class EmployeeController {
 
     @DeleteMapping("/delete/all")
     public ResponseEntity<Void> deleteAllEmployees(){
-        certificateRepo.deleteAll(); // Delete all certificates first
+        //Deletes all certificates
+        certificateRepo.deleteAll();
         employeeRepo.deleteAll();
         return ResponseEntity.noContent().build();
     }
 
-    // New endpoint to get employee with certificate
+    //Fetches employee with certificate
     @GetMapping("/{id}/with-certificate")
     public ResponseEntity<Employee> getEmployeeWithCertificate(@PathVariable Long id){
         Optional<Employee> employee = employeeRepo.findById(id);

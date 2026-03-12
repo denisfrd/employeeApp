@@ -26,7 +26,7 @@ public class CertificateDTO {
         this.certificateType = certificateType;
     }
 
-    // Getters and Setters
+    //Getters and Setters
     public Long getEmployeeId() { return employeeId; }
     public void setEmployeeId(Long employeeId) { this.employeeId = employeeId; }
 
