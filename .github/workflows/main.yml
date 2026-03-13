@@ -234,7 +234,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '25'
+          node-version: '20'
 
       - name: Install Newman
         run: npm install -g newman
