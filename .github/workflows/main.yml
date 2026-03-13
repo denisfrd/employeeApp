@@ -181,7 +181,7 @@ jobs:
           
           #Wait for application to start
           echo "Waiting for application to start..."
-          sleep 5
+          sleep 10
           
           #Tests the application using curl
           echo "========================================="
@@ -258,7 +258,7 @@ jobs:
           APP_PID=$!
           
           #Waits for app to start
-          sleep 5
+          sleep 10
           
           #Creates Postman test collection
           cat > postman_collection.json << 'EOF'
@@ -356,7 +356,7 @@ jobs:
           echo "APP_PID=$APP_PID" >> $GITHUB_ENV
           
           #Waits for startup
-          sleep 5
+          sleep 10
   
       - name: Verify Certificate Storage
         run: |
