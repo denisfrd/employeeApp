@@ -181,7 +181,7 @@ jobs:
           
           #Wait for application to start
           echo "Waiting for application to start..."
-          sleep 10
+          sleep 5
           
           #Tests the application using curl
           echo "========================================="
@@ -258,7 +258,7 @@ jobs:
           APP_PID=$!
           
           #Waits for app to start
-          sleep 10
+          sleep 5
           
           #Creates Postman test collection
           cat > postman_collection.json << 'EOF'
@@ -356,7 +356,7 @@ jobs:
           echo "APP_PID=$APP_PID" >> $GITHUB_ENV
           
           #Waits for startup
-          sleep 10
+          sleep 5
   
       - name: Verify Certificate Storage
         run: |
@@ -446,6 +446,6 @@ jobs:
           - Tested all endpoints with H2 database
           - Verified CRUD operations
           
-          •Artifacts
+          ##Artifacts
           - SSL certificates available for 7 days
           EOF
